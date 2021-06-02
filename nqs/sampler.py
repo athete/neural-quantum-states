@@ -256,8 +256,7 @@ class Sampler:
 
         # Save the computed energies to a file
         with open(self.dataDir + 'computed_energies.txt', 'a+') as f:
-            np.savetxt(f, np.array([estAvg]))
-            f.write("\n")
+            np.savetxt(f, estAvg)
         
 
     def chooseRandomSite(self) -> int:
