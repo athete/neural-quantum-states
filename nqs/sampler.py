@@ -22,34 +22,38 @@ All use of these programs is entirely at the user's own risk.
 '''
 
 
-from typing import List
+from typing import List, Any, Tuple
 import numpy as np
-import random
 import math 
+import os
 
 class Sampler:
     '''
     This class runs the Metropolis-Hastings algorithm to generate spin configuaration samples from the network.
     '''
 
-    def __init__(self, hamiltonian, neuralNetState, zeroMagnetization=True, filename=None, seed=0, initialState=None) -> None:
+    def __init__(self, hamiltonian, neuralNetState, zeroMagnetization=True, filename=None, initialState=None) -> None:
         self.hamiltonian = hamiltonian
         self.neuralNetState = neuralNetState
         self.neuralNetEnergy = None
         self.neuralNetEnergyError = None
-        self.localEnergies = np.ndarray()
+        self.localEnergies = []
         self.zeroMagnetization = zeroMagnetization
-        self.seed = seed
         self.samplesFile = filename
-        # ? self.numSpins = self.hamiltonian.numSpins
-        self.numSpins = self.neuralNetState.numSpins
-        self.stateHistory = np.ndarray()
+        self.numSpins = self.hamiltonian.numSpins
+        self.stateHistory = []
         self.currentLocalEnergy = None
         self.correlation_time = None
 
         # Sampling Statistics
         self.acceptances = None
         self.numMoves = None
+
+        # path to store energies
+        self.dataDir = './data/'
+
+        if not os.path.exists(self.dataDir):
+            os.makedirs(self.dataDir)
 
         if initialState is None:
             self.initRandomState()
@@ -62,7 +66,7 @@ class Sampler:
         '''
 
         self.currentState = np.random.uniform(size=self.numSpins)
-        self.currentState = np.where(self.currentState < 0.5, x=-1, y=1)
+        self.currentState = np.where(self.currentState < 0.5, -1, 1)
 
         if self.zeroMagnetization:
             if self.numSpins % 2:
@@ -88,6 +92,10 @@ class Sampler:
 
 
     def randomSpinFlips(self, numFlips) -> List:
+        '''
+        For the Metropolis-Hastings algorithm, randomly flips at most two sites in a 
+        state. 
+        '''
         firstSite = self.chooseRandomSite()
 
         if numFlips == 2:
@@ -107,13 +115,21 @@ class Sampler:
             return [firstSite]
 
     def resetSamplerStats(self) -> None:
+        '''
+        Resets the sampler statistics, i.e, the number of acceptances, the total number of moves, and the 
+        state history. 
+        '''
         self.acceptances = 0
         self.numMoves = 0
+        self.stateHistory = []
 
-    def acceptanceRate(self):
+    def acceptanceRate(self) -> float:
+        '''
+        Calculates the acceptance rate of the sampling
+        '''
         return self.acceptances / self.numMoves
 
-    def move(self, numFlips):
+    def move(self, numFlips) -> None:
         flips = self.randomSpinFlips(numFlips)
         if len(flips) > 0:
             # Find the acceptance probability
@@ -128,28 +144,28 @@ class Sampler:
                     self.currentState[flip] *= -1
                 self.acceptances += 1
 
-        # ? numMoves
-        # numMoves += 1
+        self.numMoves += 1
 
-    def computeLocalEnergy(self):
+    def computeLocalEnergy(self) -> float:
         '''
-        Find the value of the local energy on the current state
+        Finds the value of the local energy on the current state
         '''
 
         # Find the non-zero matrix elements of the Hamiltonian
         state = self.currentState
         (matElements, spinFlips) =  self.hamiltonian.findNonZeroElements(state)
         
-        energies = np.ndarray([self.neuralNetState.amplitudeRatio(state, spinFlips[i])*element 
-                                for (i, element) in enumerate(matElements)])
-        return np.sum(energies)
+        energies = [self.neuralNetState.amplitudeRatio(state, spinFlips[i])*element 
+                                for (i, element) in enumerate(matElements)]
+        return sum(energies)
     
-    def run(self, numSweeps, thermFactor=0.1, sweepFactor=1, numFlips=None):
+    def run(self, numSweeps, thermFactor=0.1, sweepFactor=1, numFlips=None) -> None:
         '''
         Runs the Monte-Carlo Sampling for the NQS. 
         A sweep consists of (numSpins * sweepFactor) steps; sweep to consists of
         flipping each spin an expected number of numFlips times.
         '''
+        
         if numFlips is None:
             numFlips = self.hamiltonian.minSpinFlips
 
@@ -194,10 +210,11 @@ class Sampler:
 
         return self.estimateOutputEnergy()
 
-    def estimateOutputEnergy(self):
+    def estimateOutputEnergy(self) -> None:
         '''
-        Computes a stochastic estimate of the energy of the NQS
+        Computes a stochastic estimate of the energy of the NQS and writes the energy to a file 'computed_energies.txt'
         '''
+
         nblocks = 50
         blocksize = len(self.localEnergies) // nblocks
         enmean = 0
@@ -236,14 +253,12 @@ class Sampler:
         autocorrelation = f'Estimated autocorrelation time is {self.correlation_time}'
         
         print(autocorrelation)
-        
 
-    def writeCurrentState(self, filename):
-        line = f''
-        for spinValue in self.currentState:
-            line += f' {spinValue} '
-        line += f' {self.currentLocalEnergy} '
-        filename.write(line + '\n')
+        # Save the computed energies to a file
+        with open(self.dataDir + 'computed_energies.txt', 'a+') as f:
+            np.savetxt(f, np.array([estAvg]))
+            f.write("\n")
+        
 
     def chooseRandomSite(self) -> int:
         '''
@@ -251,12 +266,4 @@ class Sampler:
         serves as a random index for the currentState attribute.
         '''
         return np.random.randint(low=0, high=self.numSpins-1)
-
-
-
-
-
-
-
-        
 
