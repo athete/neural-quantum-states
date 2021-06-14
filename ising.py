@@ -10,13 +10,13 @@ def runOptimizer():
     nqs = NeuralQuantumState()
 
     # Define the parameters for the Monte-Carlo Sampling
-    sampler_params = {'numSweeps': 10000, 'thermFactor': 0., 'sweepFactor': 1, 'numFlips': 1}
+    sampler_params = {'numSweeps': 1000, 'thermFactor': 0., 'sweepFactor': 1, 'numFlips': 1}
 
     # Instantiate the optimizer
     optimizer = StochasticReconfigOptimizer(hamiltonian, nqs, samplerParams=sampler_params, learningRate=0.01)
 
     # Run the optimizer
-    optimizer.run(100)
+    optimizer.run(2)
 
 if __name__ == '__main__':
     runOptimizer()

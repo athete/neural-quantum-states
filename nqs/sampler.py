@@ -144,7 +144,6 @@ class Sampler:
             psiRatio = self.neuralNetState.amplitudeRatio(
                 self.currentState, flipSites)
             acceptanceProbability = np.square(np.abs(psiRatio))
-
             # Metropolis-Hastings Test
             if acceptanceProbability > np.random.random():
                 self.neuralNetState.updateLookupTables(
