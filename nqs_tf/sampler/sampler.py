@@ -2,6 +2,7 @@ from hamiltonians.ising import Ising1D
 import numpy as np
 import tensorflow as tf
 import os
+from tqdm import tqdm
 
 class MetropolisHastingsSampler:
     """ Implements Markov Chain Monte Carlo Sampling of the wavefunction.
@@ -24,7 +25,7 @@ class MetropolisHastingsSampler:
     init_state
         A state to initialize the sampler.
     write_energies
-        If True, writes the computed ground state energy to ./data/energies.txt
+        If True, writes the computed ground state energies at each epoch to ./data/energies.txt
     """
     def __init__(
         self,
@@ -42,7 +43,7 @@ class MetropolisHastingsSampler:
         # Stores the computed local energies
         self.local_energies = []
         # Stores the computed d(log Ψ) values
-        self.dpsi_list = []
+        self.dpsi_over_psi_list = []
         # Stores local energy * d(log Ψ) values
         self.eloc_times_dpsi_list = []
 
@@ -99,20 +100,24 @@ class MetropolisHastingsSampler:
         """ Defines one move of the sampler.
 
         A move consists of flipping a random site in the current state to generate
-        a candidate state. If the ratio |Ψ(candidate)/Ψ(state)|^2 > uniform(0, 1), the 
-        candidate state is accepted and set to the current state in the Markov chain.
+        a candidate state. If the ratio r = |Ψ(candidate)/Ψ(state)|^2 is >=1, the 
+        candidate state is accepted. If r < 1, then if r > uniform(0, 1), the candidate state is accepted
+        and set to the current state in the Markov chain.
         """
         candidate = self.flip_spin()
         psi_ratio = self.amplitude_ratio(self.current_state, candidate)
-        accept_prob = tf.math.square(tf.math.abs(psi_ratio))
-        if accept_prob.numpy() > self.rng.random():
+        r = tf.math.square(tf.math.abs(psi_ratio))
+        if r.numpy() >= 1:
             self.current_state = candidate
+        else:
+            if r.numpy() >= self.rng.uniform(low=0, high=1):
+                self.current_state = candidate
 
     def burn_in(self, sweep_factor):
         """ Burns in the sampler.
 
         Burn-in is performed by running the sampler for `sweep_factor * num_spins` iterations
-        but discarding the drawn samples by not counted them towards any Monte-Carlo statistics. 
+        and discarding the drawn samples by not counted them towards any Monte-Carlo statistics. 
         """
         for _ in range(sweep_factor * self.num_spins):
                 self.move()
@@ -131,7 +136,7 @@ class MetropolisHastingsSampler:
 
         self.reset_state_history()
 
-        for _ in range(num_sweeps):
+        for _ in tqdm(range(num_sweeps)):
             self.burn_in(sweep_factor)
             self.current_eloc = self.find_local_energy()
             self.local_energies.append(self.current_eloc)
@@ -150,11 +155,11 @@ class MetropolisHastingsSampler:
         """
         with tf.GradientTape() as tape:
             psi = self.nqs(self.current_state)
+            log_psi = tf.math.log(psi)
         weights = self.nqs.trainable_variables
-        dpsi = tape.gradient(psi, weights)
-        self.dpsi_list.append([(1/psi.numpy())*grad for grad in dpsi])
-        self.eloc_times_dpsi_list.append([(self.current_eloc.numpy()/psi.numpy())*grad for grad in dpsi])
-
+        dpsi_over_psi_ = tape.gradient(log_psi, weights)
+        self.dpsi_over_psi_list.append(dpsi_over_psi_)
+        self.eloc_times_dpsi_list.append(self.current_eloc.numpy() * dpsi_over_psi_)
 
     def find_local_energy(self):
         """ Computes the local energy for a drawn state. """
