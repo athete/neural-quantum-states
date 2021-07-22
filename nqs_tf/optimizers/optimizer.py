@@ -50,8 +50,8 @@ class OptimizerWrapper:
         For a detailed description of the gradient calculation, see 
         https://doi.org/10.1002/adts.202000269
         """
-        dpsis = self.sampler.dpsi_list
         nqs_energy = self.sampler.nqs_energy
+        dpsis = self.sampler.dpsi_over_psi_list
         elocs_times_dpsi = self.sampler.eloc_times_dpsi_list
 
         gradient = (2/num_sweeps) * (
@@ -64,17 +64,22 @@ class OptimizerWrapper:
         """ Runs the optimizer.
         """
         init_state = None
-        for epoch in range(num_epochs):
-            print(f"\n\nEpoch {epoch+1}/{num_epochs}")
-            self.sampler = MetropolisHastingsSampler(
-                hamiltonian=self.hamiltonian,
-                nqs=self.nqs,
-                init_state=init_state
-                )
-            self.sampler.run(num_sweeps=self.num_sweeps)
-            init_state = self.sampler.current_state
-            weights = self.nqs.trainable_variables
-            grads = self.calc_grads(self.num_sweeps)
-            self.optimizer.apply_gradients(zip(grads, weights))
+        try:
+            for epoch in range(num_epochs):
+                print(f"\n\nEpoch {epoch+1}/{num_epochs}")
+                self.sampler = MetropolisHastingsSampler(
+                    hamiltonian=self.hamiltonian,
+                    nqs=self.nqs,
+                    init_state=init_state
+                    )
+                self.sampler.run(num_sweeps=self.num_sweeps)
+                init_state = self.sampler.current_state
+                weights = self.nqs.trainable_variables
+                grads = self.calc_grads(self.num_sweeps)
+                self.optimizer.apply_gradients(zip(grads, weights))
+        except KeyboardInterrupt:
+            choice = input("\nDo you want to save the model? (y/n)")
+            if choice is 'y':
+                self.nqs.save(f'./Saved Models/model-{epoch}_epochs-{self.sampler.nqs_energy:.3f}')
 
         
