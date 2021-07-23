@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense
-from activations.activations import tan_sigmoid, exponential
+from activations.activations import tan_sigmoid, exponential, ReLU
 
 class FFNN(Model):
     """ Creates a generic Feedforward neural network.
@@ -10,7 +10,7 @@ class FFNN(Model):
         super(FFNN, self).__init__()
     
     def build(self, input_shape):
-        self.dense1 = Dense(units=input_shape[-1], activation=tan_sigmoid)
+        self.dense1 = Dense(units=input_shape[-1], activation=ReLU)
         self.output_layer = Dense(units=1, activation=exponential)
     
     def call(self, inputs):
